@@ -1,6 +1,7 @@
 package com.example.pixShift.service;
 
 import com.example.pixShift.model.Product;
+import com.example.pixShift.response.WebhookResponse;
 import com.example.pixShift.service.PixShiftService;
 import com.example.pixShift.service.processing.CSVExportService;
 import com.example.pixShift.service.processing.CSVService;
@@ -11,7 +12,9 @@ import com.example.pixShift.service.status.ProcessingStatus;
 import com.example.pixShift.service.status.ProcessingStatusService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
@@ -19,6 +22,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,6 +44,9 @@ public class PixShiftServiceImpl implements PixShiftService {
     private ProcessingStatusService processingStatusService;
     @Autowired
     private CSVExportService csvExportService;
+
+    @Value("${webhook.url}")
+    private String webhookUrl;
 
     @Override
     public String processCSVFile(MultipartFile file) {
@@ -97,11 +104,25 @@ public class PixShiftServiceImpl implements PixShiftService {
             String csvUrl = csvExportService.generateAndUploadCSV(); // Call the CSV export service
             processingStatusService.setCSVUrl(requestId, csvUrl); // Set the CSV URL in status
 
+            // Trigger the webhook after processing is complete
+            triggerWebhook(requestId, "COMPLETED", csvUrl);
+
             return requestId;
 
         } catch (Exception e) {
             log.error("Error processing CSV file", e);
             throw new RuntimeException("Error processing CSV file.", e);
+        }
+    }
+
+    private void triggerWebhook(String requestId, String status, String csvUrl) {
+        WebhookResponse webhookResponse = new WebhookResponse(requestId, status, csvUrl);
+
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            restTemplate.postForEntity(webhookUrl, webhookResponse, String.class);
+        } catch (Exception e) {
+            log.error("Error triggering webhook", e);
         }
     }
 

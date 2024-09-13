@@ -20,7 +20,8 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-
+  webhook:
+    url: ${WEBHOOK_URL}
   logging:
     level:
       org:
